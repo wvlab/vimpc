@@ -499,19 +499,25 @@ std::string Song::ParseString(std::string::const_iterator & it, bool valid) cons
       }
       else if (*it == '%')
       {
+         uint64_t pad = 0;
          *++it;
          if (*it == '%')
          {
             result += *it;
+            continue;
          }
-         else if ((*it == 'a') || (*it == 'A') ||
-                  (*it == 'b') || (*it == 'B') ||
-                  (*it == 'r') || (*it == 'R') ||
-                  (*it == 'm') || (*it == 'M') ||
-                  (*it == 'l') || (*it == 't') ||
-                  (*it == 'n') || (*it == 'f') ||
-                  (*it == 'd') || (*it == 'c') ||
-                  (*it == 'y') || (*it == 'N'))
+         while (*it - '0' >= 0 and *it - '0' <= 9)
+         {
+            pad = (pad * 10) + (*it - '0');
+            *++it;
+         }
+         if ((*it == 'a') || (*it == 'A') ||
+             (*it == 'b') || (*it == 'B') ||
+             (*it == 'r') || (*it == 'R') ||
+             (*it == 'm') || (*it == 'M') ||
+             (*it == 'l') || (*it == 't') ||
+             (*it == 'n') || (*it == 'f') ||
+             (*it == 'd') || (*it == 'c'))
          {
             SongFunction Function = SongInfo[*it];
             std::string val = (*this.*Function)();
@@ -521,6 +527,10 @@ std::string Song::ParseString(std::string::const_iterator & it, bool valid) cons
                 (*it == 'R') || (*it == 'M'))
             {
                SwapThe(val);
+            }
+            if (val.size() < pad)
+            {
+               val.insert(0, std::string(pad - val.size(), ' ')); 
             }
 
             if ((val == "") || (val.substr(0, strlen("Unknown")) == "Unknown"))

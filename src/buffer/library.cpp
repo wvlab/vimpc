@@ -303,20 +303,18 @@ void Library::Sort(LibraryEntry * entry)
 
 void Library::AddToPlaylist(Mpc::Song::SongCollection Collection, Mpc::Client & client, Mpc::ClientState & clientState, uint32_t position)
 {
-   if (position < Size())
+   if (position >= Size()) return;
+   if (Collection == Mpc::Song::Single)
    {
-      if (Collection == Mpc::Song::Single)
-      {
-         AddToPlaylist(client, clientState, Get(position));
-      }
-      else
-      {
-         Mpc::CommandList list(client);
+      AddToPlaylist(client, clientState, Get(position));
+   }
+   else
+   {
+      Mpc::CommandList list(client);
 
-         for (uint32_t i = 0; i < Size(); ++i)
-         {
-            AddToPlaylist(client, clientState, Get(i));
-         }
+      for (uint32_t i = 0; i < Size(); ++i)
+      {
+         AddToPlaylist(client, clientState, Get(i));
       }
    }
 }
@@ -419,9 +417,9 @@ void Library::ForEachChild(uint32_t index, FUNCTION<void (Mpc::Song *)> callback
    }
 }
 
-void Library::ForEachChild(uint32_t index, FUNCTION<void (Mpc::LibraryEntry *)> callback) const
+void Library::ForEachChild(Mpc::LibraryEntry *parent_, FUNCTION<void (Mpc::LibraryEntry *)> callback) const
 {
-   for (auto child : Get(index)->children_)
+   for (auto child : parent_->children_)
    {
       if (child->type_ == AlbumType)
       {
@@ -432,6 +430,30 @@ void Library::ForEachChild(uint32_t index, FUNCTION<void (Mpc::LibraryEntry *)> 
       }
 
       (callback)(child);
+   }
+}
+
+void Library::ForEachChild(uint32_t index, FUNCTION<void (Mpc::LibraryEntry *)> callback) const
+{
+   Library::ForEachChild(Get(index), callback);
+}
+
+void Library::ForEachParent(FUNCTION<void (Mpc::LibraryEntry *)> callback) const
+{
+   for (uint32_t i = 0; i < Size(); ++i)
+   {
+      if (Get(i)->type_ == ArtistType)
+      {
+         for (auto child : Get(i)->children_)
+         {
+            if (child->type_ == AlbumType)
+            {
+               (callback)(child);
+            }
+         }
+
+         (callback)(Get(i));
+      }
    }
 }
 
@@ -454,26 +476,6 @@ void Library::ForEachSong(FUNCTION<void (Mpc::Song *)> callback) const
       }
    }
 }
-
-void Library::ForEachParent(FUNCTION<void (Mpc::LibraryEntry *)> callback) const
-{
-   for (uint32_t i = 0; i < Size(); ++i)
-   {
-      if (Get(i)->type_ == ArtistType)
-      {
-         for (auto child : Get(i)->children_)
-         {
-            if (child->type_ == AlbumType)
-            {
-               (callback)(child);
-            }
-         }
-
-         (callback)(Get(i));
-      }
-   }
-}
-
 
 void Library::Expand(uint32_t line)
 {
@@ -538,13 +540,14 @@ std::string Library::String(uint32_t position) const
 
 std::string Library::PrintString(uint32_t position) const
 {
-   Mpc::EntryType const type = Get(position)->type_;
+   auto pos = Get(position);
+   Mpc::EntryType const type = pos->type_;
 
    std::string Result = "";
 
    if (type == Mpc::ArtistType)
    {
-      std::string artist(Get(position)->artist_);
+      std::string artist(pos->artist_);
       std::string const find = "$";
       std::string const replace = "\\$";
       for(std::string::size_type i = 0; (i = artist.find(find, i)) != std::string::npos;)
@@ -556,11 +559,13 @@ std::string Library::PrintString(uint32_t position) const
    }
    else if (type == Mpc::AlbumType)
    {
-      Result = "    " + Get(position)->children_.front()->song_->FormatString(settings_.Get(Setting::AlbumFormat));
+      Result = "    " + pos->album_;
    }
    else if (type == Mpc::SongType)
    {
-      Result = "       " + Get(position)->song_->FormatString(settings_.Get(Setting::LibraryFormat));
+      int maxi = 0;
+      ForEachChild(pos->parent_, [&maxi] (Mpc::LibraryEntry *child) { maxi = std::max((int)(child->song_->Track().size()), maxi); });
+      Result = "        " + pos->song_->FormatString("$I%" + std::to_string(maxi) + "n" + settings_.Get(Setting::LibraryFormat));
    }
 
    return Result;
